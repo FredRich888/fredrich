@@ -57,3 +57,5 @@ if __name__ == "__main__":
         send_tg(f"🎯 **波段精選名單**:\n" + "\n".join(hits))
     else:
         send_tg("今日無符合共振標的，繼續耐心等待。")
+if __name__ == "__main__":
+    send_tg("測試訊息：哈囉！雲端系統已連線！")
