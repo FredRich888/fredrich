@@ -1,0 +1,21 @@
+name: Stock_Screener
+on:
+  schedule:
+    - cron: '30 22 * * *' # 每天台灣時間早上 6:30 執行
+  workflow_dispatch:      # 讓我們可以按按鈕手動測試
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with: {python-version: '3.9'}
+      - name: Install dependencies
+        run: pip install FinMind requests pandas
+      - name: Run
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: python main.py
