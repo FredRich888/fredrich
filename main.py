@@ -1,18 +1,59 @@
 import os
 import requests
+import pandas as pd
+from FinMind.data import DataLoader
+
+# 設定參數
+FINMIND_TOKEN = os.getenv('FINMIND_TOKEN')
+TG_TOKEN = os.getenv('TG_TOKEN')
+TG_CHAT_ID = os.getenv('TG_CHAT_ID')
+
+def get_data(sid):
+    dl = DataLoader()
+    dl.login_token(token=FINMIND_TOKEN)
+    # 抓取近 100 天數據
+    df = dl.taiwan_stock_daily(stock_id=sid, start_date='2025-12-01')
+    return df
+
+def resonance_score(df):
+    if len(df) < 60: return 0
+    score = 0
+    close = df['close']
+    
+    # 1. 趨勢：MA5 > MA20 > MA60
+    ma5 = close.rolling(5).mean().iloc[-1]
+    ma20 = close.rolling(20).mean().iloc[-1]
+    ma60 = close.rolling(60).mean().iloc[-1]
+    if ma5 > ma20 > ma60: score += 4
+    
+    # 2. VCP 波動收縮：近 5 日振幅 < 5%
+    high_5 = df['high'].tail(5).max()
+    low_5 = df['low'].tail(5).min()
+    price_range = (high_5 - low_5) / close.iloc[-2]
+    if price_range < 0.05: score += 4
+    
+    # 3. 量能確認
+    vol_ma20 = df['volume'].rolling(20).mean().iloc[-1]
+    if df['volume'].iloc[-1] > vol_ma20 * 1.2: score += 2
+    
+    return score
 
 def send_tg(msg):
-    token = os.getenv('TG_TOKEN')
-    chat_id = os.getenv('TG_CHAT_ID')
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
-        "chat_id": chat_id, 
-        "text": msg, 
-        "parse_mode": "Markdown"
-    }
-    r = requests.post(url, data=payload)
-    print(f"發送狀態: {r.status_code}, 回傳內容: {r.text}")
+    url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": TG_CHAT_ID, "text": msg, "parse_mode": "Markdown"})
 
 if __name__ == "__main__":
-    # 這行前面必須有 4 個空格
-    send_tg("🚀 恭喜！縮排問題已修復，雲端連線測試中！")
+    # 這裡可以修改成你想追蹤的族群，或全市場掃描
+    test_list = ['2330', '2317', '2454', '2308', '1513', '1519', '3017', '3324'] 
+    hits = []
+    for sid in test_list:
+        try:
+            data = get_data(sid)
+            s = resonance_score(data)
+            if s >= 8: hits.append(f"{sid} (得分:{s})")
+        except: continue
+    
+    if hits:
+        send_tg(f"🎯 **波段精選名單**:\n" + "\n".join(hits))
+    else:
+        send_tg("今日無符合共振標的，繼續耐心等待。")
