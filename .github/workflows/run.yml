@@ -13,7 +13,7 @@ jobs:
         with: {python-version: '3.9'}
       - name: Install dependencies
         run: pip install FinMind requests pandas tqdm
-      - name: Run
+      - name: Run Python Script
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
