@@ -16,12 +16,12 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install dependencies
-        run: pip install requests pandas openpyxl FinMind
+      - name: Install dependencies tqdm
+        run: pip install requests pandas openpyxl FinMind tqdm
 
       - name: Run Python Script
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
-        run: pip install requests pandas openpyxl FinMind tqdm
+        run: python main.py
