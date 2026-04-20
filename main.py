@@ -3,8 +3,8 @@ import requests
 
 # 這裡必須保留定義，程式才認識 send_tg
 def send_tg(msg):
-    token = os.getenv('TG_TOKEN')
-    chat_id = os.getenv('TG_CHAT_ID')
+    token = os.getenv('TELEGRAM_BOT_TOKEN')
+    chat_id = os.getenv('TELEGRAM_CHAT_ID')
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"}
     r = requests.post(url, data=payload)
