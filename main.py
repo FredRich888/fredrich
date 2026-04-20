@@ -88,6 +88,3 @@ def screen_stocks():
 
 if __name__ == "__main__":
     screen_stocks()
-
-if __name__ == "__main__":
-    main()
