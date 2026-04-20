@@ -36,7 +36,7 @@ def get_stock_score(stock_id, dl):
         return None
 
 def main():
-    print("🚀 啟動 AI 雲端篩選系統...")
+    print("啟動 AI 雲端篩選系統...")
     try:
         df = pd.read_excel("stocks.xlsx")
         monitor_list = df['stock_id'].astype(str).tolist()
@@ -56,11 +56,11 @@ def main():
     top_5 = sorted(results, key=lambda x: x['score'], reverse=True)[:5]
     
     if top_5:
-        msg = "🤖 AI 強勢股篩選結果\n\n"
+        msg = " AI 強勢股篩選結果\n\n"
         for i, item in enumerate(top_5, 1):
             msg += f"{i}. {item['name']} | 價格: {item['price']} | 漲幅: {item['change']}%\n"
     else:
-        msg = "⚠️ 篩選完成，今日暫無符合條件之強勢股。"
+        msg = " 篩選完成，今日暫無符合條件之強勢股。"
     
     send_tg(msg)
 
