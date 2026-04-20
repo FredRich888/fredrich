@@ -1,4 +1,4 @@
-name: Stock_Screener
+name: Install dependencies
 
 on:
   schedule:
@@ -24,4 +24,4 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
-        run: python main.py
+        run: pip install requests pandas openpyxl FinMind tqdm
