@@ -1,7 +1,7 @@
 name: Stock_Screener
 on:
   schedule:
-    - cron: '30 22 * * *' # 每天台灣時間早上 6:30 執行
+    - cron: '30 22 * * *' # 每天台灣時間下午 15:30 執行
   workflow_dispatch:      # 讓我們可以按按鈕手動測試 
 jobs:
   build:
