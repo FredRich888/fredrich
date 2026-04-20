@@ -1,4 +1,4 @@
-name: Stock_Screener
+name: Install dependencies
 on:
   schedule:
     - cron: '30 22 * * *' # 每天台灣時間下午 15:30 執行
@@ -18,4 +18,4 @@ jobs:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python main.py
+        run: pip install requests pandas openpyxl FinMind
