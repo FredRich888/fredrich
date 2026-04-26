@@ -2,3 +2,5 @@ pandas
 numpy
 FinMind
 tqdm
+requests
+google-generativeai
