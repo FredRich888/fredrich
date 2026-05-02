@@ -3,13 +3,30 @@ import numpy as np
 from FinMind.data import DataLoader
 from datetime import datetime, timedelta
 import time
+import os
+import requests
 
-# --- 核心參數調整 ---
+# --- 核心參數 ---
 MIN_PRICE = 12
-MAX_PRICE = 92
-MACD_PARAMS = (6, 12, 2)
-VOL_FILTER = 1.0        # 降至 1.0，避免在節前量縮時篩不到股
-MIN_SHEETS = 500        # 成交量張數門檻
+MAX_PRICE = 250
+VOL_FILTER = 1.2
+MIN_SHEETS = 500
+
+def send_telegram_msg(message):
+    """發送訊息至 Telegram"""
+    # 從 GitHub Secrets 讀取 Token，避免外洩
+    token = os.getenv("TG_TOKEN")
+    chat_id = os.getenv("TG_CHAT_ID")
+    if not token or not chat_id:
+        print("⚠️ 未設定 Telegram Token 或 Chat ID，跳過發送。")
+        return
+    
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
+    try:
+        requests.post(url, data=payload)
+    except Exception as e:
+        print(f"Telegram 發送失敗: {e}")
 
 def calculate_indicators(df):
     df.columns = [str(c).lower() for c in df.columns]
@@ -18,82 +35,64 @@ def calculate_indicators(df):
     df['ma60'] = df['close'].rolling(60).mean()
     df['vol_ma5'] = df['trading_volume'].rolling(5).mean()
     
-    ema_f = df['close'].ewm(span=MACD_PARAMS[0], adjust=False).mean()
-    ema_s = df['close'].ewm(span=MACD_PARAMS[1], adjust=False).mean()
+    ema_f = df['close'].ewm(span=6, adjust=False).mean()
+    ema_s = df['close'].ewm(span=12, adjust=False).mean()
     df['dif'] = ema_f - ema_s
-    df['macd_dea'] = df['dif'].ewm(span=MACD_PARAMS[2], adjust=False).mean()
-    df['hist'] = df['dif'] - df['macd_dea']
+    df['hist'] = df['dif'] - df['dif'].ewm(span=2, adjust=False).mean()
     
-    # K棒實體計算：處理最高等於最低的狀況 (如漲停)
     df['range'] = df['high'] - df['low']
     df['body'] = (df['close'] - df['open']).abs()
     df['k_body'] = np.where(df['range'] > 0, df['body'] / df['range'], 1.0)
     return df
 
-def run_pro_screener_v2():
+def run_final_system():
     api = DataLoader()
-    print(f"【啟動】分析區間：{MIN_PRICE} - {MAX_PRICE} 元 | 爆量門檻：{VOL_FILTER}x")
-    
+    token = os.getenv("FINMIND_TOKEN")
+    if token: api.login_by_token(token)
+
     stock_info = api.taiwan_stock_info()
     all_stocks = stock_info[stock_info['stock_id'].str.len() == 4]['stock_id'].tolist()
     start_dt = (datetime.now() - timedelta(days=100)).strftime('%Y-%m-%d')
     results = []
 
-    # 基準日檢測
+    # 獲取基準日
     sample = api.taiwan_stock_daily(stock_id="2330", start_date=(datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d'))
-    if sample.empty: return
     latest_trade_date = sample.iloc[-1]['date']
-    print(f"【檢測】分析基準日: {latest_trade_date}")
 
-    for i, stock_id in enumerate(all_stocks):
+    for stock_id in all_stocks:
         try:
             df = api.taiwan_stock_daily(stock_id=stock_id, start_date=start_dt)
             if len(df) < 60: continue
             
-            # 價格先行過濾
             curr_price = df.iloc[-1]['close']
             if not (MIN_PRICE <= curr_price <= MAX_PRICE): continue
 
             df = calculate_indicators(df)
-            t = df.iloc[-1]
-            t_1 = df.iloc[-2]
-
+            t, t_1 = df.iloc[-1], df.iloc[-2]
             if t['date'] != latest_trade_date: continue
 
-            # --- 邏輯篩選 (保持高勝率核心) ---
-            # 1. 趨勢與動能 (核心不能放寬)
+            # 篩選邏輯
             cond_macd = (t['dif'] > 0) and (t['hist'] > t_1['hist'])
             cond_ma = (t['ma5'] > t['ma20']) and (t['ma20'] > t['ma60'])
-            
-            # 2. 實體強度 (放寬一字線漲停)
             is_limit_up = (t['close'] >= t_1['close'] * 1.095) and (t['close'] == t['high'])
             cond_k = (t['k_body'] > 0.5) or is_limit_up
-            
-            # 3. 量能過濾
             vol_sheets = t['trading_volume'] / 1000
             cond_vol = (vol_sheets > MIN_SHEETS) and (t['trading_volume'] >= t['vol_ma5'] * VOL_FILTER)
 
             if cond_macd and cond_ma and cond_k and cond_vol:
-                results.append({
-                    "代碼": stock_id,
-                    "名稱": stock_info[stock_info['stock_id']==stock_id]['stock_name'].values[0],
-                    "收盤": t['close'],
-                    "漲幅%": round(((t['close']/t_1['close'])-1)*100, 2),
-                    "成交量": int(vol_sheets),
-                    "實體%": round(t['k_body']*100, 1)
-                })
-            
-            if (i+1) % 500 == 0: print(f"掃描進度: {i+1}/{len(all_stocks)}")
-            time.sleep(0.01)
+                name = stock_info[stock_info['stock_id']==stock_id]['stock_name'].values[0]
+                results.append(f"✅ {stock_id} {name} | 價:{t['close']} | 漲:{round(((t['close']/t_1['close'])-1)*100, 2)}%")
         except: continue
 
-    print("\n" + "🏁"*15 + " 篩選結果 " + "🏁"*15)
+    # --- 執行通知 ---
+    header = f"🚀 *{latest_trade_date} 選股報表 ({MIN_PRICE}-{MAX_PRICE}元)*\n"
     if results:
-        res_df = pd.DataFrame(results).sort_values(by="漲幅%", ascending=False)
-        print(res_df.to_string(index=False))
+        msg = header + "\n".join(results)
     else:
-        print(f"今日 ({latest_trade_date}) 市場結構偏弱，無標的同時符合 [均線多排+MACD轉強+實體紅K]。")
-    print("🏁"*40 + "\n")
+        msg = header + "今日無符合標的，保護本金優先。盤勢偏弱。"
+    
+    print(msg)
+    send_telegram_msg(msg)
 
 if __name__ == "__main__":
-    run_pro_screener_v2()
+    run_final_system()
