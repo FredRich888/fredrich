@@ -1,3 +1,4 @@
+Python
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -109,7 +110,7 @@ if st.button("開始判斷"):
                     st.write(f"- 成交量放大 (>= 2倍5日均量): {'✅' if volume_ok else '❌'}")
                     st.write(f"- MACD 動能增強: {'✅' if macd_ok else '❌'}")
                     st.write(f"- OBV 籌碼向上: {'✅' if obv_ok else '❌'}")
-                    st.write(f"- RSI 區間 (50~99): {'✅' if rsi_ok else '❌'}")
+                    st.write(f"- RSI 區間 (50~85): {'✅' if rsi_ok else '❌'}")
                     st.write(f"- 乖離率控制 (收盤/EMA5 <=1.15): {'✅' if price_ok else '❌'}")
 
         except Exception as e:
