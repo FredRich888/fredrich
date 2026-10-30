@@ -88,9 +88,9 @@ if st.button("開始判斷"):
                 volume_ok = (volume.iloc[i] >= mavol5.iloc[i] * 2.0) and (mavol5.iloc[i] >= mavol10.iloc[i])
                 macd_ok = (dif.iloc[i] > macd.iloc[i]) and (osc.iloc[i] > 0) and (osc.iloc[i] > osc.iloc[i-1])
                 obv_ok = (obv.iloc[i] > obv.iloc[i-1]) and (obv.iloc[i] > obv.iloc[i-5:i].mean())
-                rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 85) and (rsi3.iloc[i] < 95)
+                rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 115) and (rsi3.iloc[i] <120)
                 gap_ratio = close.iloc[i] / ema5.iloc[i] if ema5.iloc[i] > 0 else 0
-                price_ok = (gap_ratio > 1.0) and (gap_ratio <= 1.08)
+                price_ok = (gap_ratio > 1.0) and (gap_ratio <= 1.5)
 
                 is_selected = bool(breakout_ok and trend_ok and volume_ok and macd_ok and obv_ok and rsi_ok and price_ok)
 
@@ -109,8 +109,8 @@ if st.button("開始判斷"):
                     st.write(f"- 成交量放大 (>= 2倍5日均量): {'✅' if volume_ok else '❌'}")
                     st.write(f"- MACD 動能增強: {'✅' if macd_ok else '❌'}")
                     st.write(f"- OBV 籌碼向上: {'✅' if obv_ok else '❌'}")
-                    st.write(f"- RSI 區間 (50~85): {'✅' if rsi_ok else '❌'}")
-                    st.write(f"- 乖離率控制 (收盤/EMA5 <=1.15): {'✅' if price_ok else '❌'}")
+                    st.write(f"- RSI 區間 (50~115): {'✅' if rsi_ok else '❌'}")
+                    st.write(f"- 乖離率控制 (收盤/EMA5 <=1.5): {'✅' if price_ok else '❌'}")
 
         except Exception as e:
             st.error(f"發生錯誤，請確認股票代號是否正確或稍後再試。詳細錯誤: {e}")
