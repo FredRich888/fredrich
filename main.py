@@ -1,122 +1,121 @@
-import os  # 系統環境變數讀取
-import requests  # 發送 Telegram 請求
-import pandas as pd  # 資料分析與表格處理
-import numpy as np  # 數學運算與邏輯判斷
-from FinMind.data import DataLoader  # 抓取台股數據
-from datetime import datetime, timedelta  # 時間處理
+import streamlit as st
+import pandas as pd
+import numpy as np
+import yfinance as yf
 
-# --- 🛠️ 核心參數自定義區 (可隨時修改) ---
-MIN_PRICE = 12       # 最低股價過濾
-MAX_PRICE = 300      # 最高股價過濾
-VOL_RATIO_MIN = 1.5  # 成交量必須是均量的幾倍以上
-MIN_VOL_SHEETS = 500 # 當天成交量最少要幾張
+# 網頁標題與介面設計
+st.title("📱 V4 策略手機選股判斷器")
+st.write("輸入台股代號（例如：2330、2454），立刻為您檢視是否符合強勢突破條件！")
 
-def send_telegram(message):  # 定義傳送 Telegram 訊息函數
-    token = os.getenv("TG_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")  # 讀取機器人 Token
-    chat_id = os.getenv("TG_CHAT_ID") or os.getenv("TELEGRAM_CHAT_ID")  # 讀取你的 Chat ID
-    if not token or not chat_id: return  # 沒設定好就不跑
-    url = f"https://api.telegram.org/bot{token}/sendMessage"  # API 網址
-    payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}  # 設定格式為 Markdown
-    requests.post(url, data=payload)  # 執行發送
+# 使用者輸入股票代號
+stock_input = st.text_input("請輸入台股代號 (例如 2330):", "2330")
 
-def calculate_indicators(df):  # 定義技術指標計算函數
-    df.columns = [str(c).lower() for c in df.columns]  # 統一欄位名稱為小寫
-    # --- 均線類 ---
-    df['ma5'] = df['close'].rolling(5).mean()  # 5日均線
-    df['ma20'] = df['close'].rolling(20).mean()  # 20日均線
-    df['ma60'] = df['close'].rolling(60).mean()  # 60日均線
-    df['vol_ma5'] = df['trading_volume'].rolling(5).mean()  # 5日均量
-    # --- MACD 類 ---
-    ema12 = df['close'].ewm(span=12, adjust=False).mean()  # 快線 EMA
-    ema26 = df['close'].ewm(span=26, adjust=False).mean()  # 慢線 EMA
-    df['dif'] = ema12 - ema26  # DIF 線
-    df['dea'] = df['dif'].ewm(span=9, adjust=False).mean()  # MACD 信號線
-    df['hist'] = df['dif'] - df['dea']  # MACD 柱狀體
-    # --- K線型態類 ---
-    df['range'] = df['high'] - df['low']  # 當日震幅
-    df['body'] = (df['close'] - df['open']).abs()  # 實體紅線長度
-    df['k_body_ratio'] = np.where(df['range'] > 0, df['body'] / df['range'], 0)  # 實體佔比
-    return df
+if st.button("開始判斷"):
+    with st.spinner('正在抓取資料並計算指標中...'):
+        try:
+            # 自動補上 Yahoo Finance 的台股代號格式 (.TW)
+            ticker = stock_input.strip()
+            if not ticker.endswith(".TW") and not ticker.endswith(".TWO"):
+                # 預設先試 .TW，若不行可自行調整
+                symbol = f"{ticker}.TW" 
+            else:
+                symbol = ticker
+                
+            # 下載最近 1 年的日K資料
+            df = yf.download(symbol, period="1y", interval="1d")
+            
+            if df.empty or len(df) < 120:
+                st.error("找不到該股票資料，或歷史資料不足 120 天，請確認代號是否正確。")
+            else:
+                # 修正 MultiIndex 欄位問題（yfinance常見格式）
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.get_level_values(0)
+                
+                # --- 開始 V4 策略計算邏輯 ---
+                close = df['Close']
+                high = df['High']
+                low = df['Low']
+                open_p = df['Open']
+                volume = df['Volume']
 
-def analyze_stock(stock_id, dl):  # 定義核心分析邏輯
-    try:
-        sid = str(stock_id).split('.')[0].strip()  # 格式化股票代號
-        df = dl.taiwan_stock_daily(stock_id=sid, start_date=(datetime.now() - timedelta(days=80)).strftime('%Y-%m-%d'))
-        if len(df) < 40: return None  # 資料量不足則跳過
-        
-        curr = df.iloc[-1]  # 取得最新一筆資料
-        prev = df.iloc[-2]  # 取得前一交易日資料
-        
-        # --- [第一關：硬指標過濾] ---
-        if not (MIN_PRICE <= curr['close'] <= MAX_PRICE): return None  # 價格不在區間內就踢掉
-        if (curr['trading_volume'] / 1000) < MIN_VOL_SHEETS: return None  # 張數太少就踢掉
-        
-        df = calculate_indicators(df)  # 計算技術指標
-        t = df.iloc[-1]  # 取得最新計算後的結果
-        t_1 = df.iloc[-2]  # 取得前一天的計算結果
-        
-        # --- [第二關：技術型態核心條件] ---
-        cond_macd = (t['dif'] > 0) and (t['hist'] > t_1['hist'])  # MACD 多頭且紅柱增長
-        cond_vol = t['trading_volume'] > (t['vol_ma5'] * VOL_RATIO_MIN)  # 爆量突破
-        cond_price = (t['close'] > t['open']) and (t['close'] > t['ma5'])  # 價格收紅且站上 5 日線
-        
-        if not (cond_macd and cond_vol and cond_price): return None  # 基本條件不符就跳過
-        
-        # --- [第三關：AI 評分系統 (Scoring)] ---
-        score = 100  # 初始基礎分
-        # 1. 均線糾結加分 (如你圖中的糾結後突破)
-        ma_list = [t['ma5'], t['ma20'], t['ma60']]
-        tangle_pct = (max(ma_list) - min(ma_list)) / min(ma_list) * 100
-        score += max(0, (10 - tangle_pct) * 20)  # 越糾結加分越高
-        # 2. 量能放大加分
-        vol_ratio = t['trading_volume'] / t['vol_ma5']
-        score += min(vol_ratio * 30, 200)  # 量比越大加分越高
-        # 3. 漲幅強度加分
-        change_pct = ((t['close'] / t_1['close']) - 1) * 100
-        score += min(change_pct * 25, 250)
-        # 4. 均線多頭排列加分
-        if t['ma5'] > t['ma20'] > t['ma60']: score += 100
-        # 5. K棒實體比例加分 (代表買氣扎實)
-        score += t['k_body_ratio'] * 50
-        
-        return {
-            "id": sid, "price": t['close'], "change": round(change_pct, 2),
-            "score": int(score), "vol_r": round(vol_ratio, 1), "tangle": round(tangle_pct, 1)
-        }
-    except: return None
+                # 1. 均線 EMA
+                ema5 = close.ewm(span=5, adjust=False).mean()
+                ema20 = close.ewm(span=20, adjust=False).mean()
+                ema60 = close.ewm(span=60, adjust=False).mean()
 
-def main():  # 主程式
-    dl = DataLoader()  # 初始化
-    fm_token = os.getenv("FINMIND_TOKEN")  # 抓取 Token
-    if fm_token: dl.login_by_token(fm_token)  # 登入
-    
-    # --- 混合式掃描：先抓全市場 4 碼代號的股票 ---
-    print("🔍 正在獲取市場清單並進行全自動 AI 掃描...")
-    stock_info = dl.taiwan_stock_info()  # 獲取全台股基本資料
-    all_stocks = stock_info[stock_info['stock_id'].str.len() == 4]['stock_id'].tolist()  # 只取 4 碼股票
-    
-    candidates = []  # 準備存放合格股票
-    for sid in all_stocks:  # 循環全市場
-        res = analyze_stock(sid, dl)  # 進行深度分析
-        if res: candidates.append(res)  # 合格就放入清單
-        
-    # --- 排序與報告發送 ---
-    top_stocks = sorted(candidates, key=lambda x: x['score'], reverse=True)[:8]  # 取前 8 強
-    
-    date_str = datetime.now().strftime('%Y-%m-%d')  # 取得日期
-    header = f"🏆 *AI 多因子突破報表 ({date_str})*\n過濾條件: {MIN_PRICE}-{MAX_PRICE}元 | 量 > {MIN_VOL_SHEETS}張\n\n"
-    
-    if top_stocks:
-        body = ""
-        for i, s in enumerate(top_stocks, 1):  # 組合訊息內容
-            body += f"{i}. `{s['id']}` 價:*{s['price']}* (漲{s['change']}%) \n"
-            body += f" 評分:*{s['score']}* | 量比:{s['vol_r']} | 糾結:{s['tangle']}%\n\n"
-        msg = header + body
-    else:
-        msg = header + "⚠️ 今日市場動能不足，無符合「爆量突破糾結」之標的。"
-    
-    print(msg)  # 終端機顯示
-    send_telegram(msg)  # 傳送到手機
+                # 2. 均量
+                mavol5 = volume.rolling(window=5).mean()
+                mavol10 = volume.rolling(window=10).mean()
 
-if __name__ == "__main__":
-    main()  # 啟動！
+                # 3. RSI
+                def calc_rsi(series, period):
+                    delta = series.diff()
+                    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+                    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+                    rs = gain / loss
+                    return 100 - (100 / (1 + rs))
+
+                rsi3 = calc_rsi(close, 3)
+                rsi6 = calc_rsi(close, 6)
+
+                # 4. MACD
+                w_close = (high + low + close * 2) / 4
+                ema6 = w_close.ewm(span=6, adjust=False).mean()
+                ema12 = w_close.ewm(span=12, adjust=False).mean()
+                dif = ema6 - ema12
+                macd = dif.ewm(span=2, adjust=False).mean()
+                osc = (dif - macd) * 2
+
+                # 5. DMI
+                plus_dm = high.diff()
+                minus_dm = low.diff()
+                plus_dm = np.where((plus_dm > minus_dm) & (plus_dm > 0), plus_dm, 0.0)
+                minus_dm = np.where((minus_dm > plus_dm) & (minus_dm > 0), minus_dm, 0.0)
+                tr = pd.concat([high - low, abs(high - close.shift(1)), abs(low - close.shift(1))], axis=1).max(axis=1)
+                atr = tr.rolling(window=10).mean()
+                plus_di = 100 * (pd.Series(plus_dm).rolling(window=10).mean() / atr)
+                minus_di = 100 * (pd.Series(minus_dm).rolling(window=10).mean() / atr)
+                dx = 100 * np.abs(plus_di - minus_di) / (plus_di + minus_di)
+                adx = dx.rolling(window=10).mean()
+
+                # 6. OBV
+                obv = (np.sign(close.diff()) * volume).fillna(0).cumsum()
+
+                # 取最後一天數據
+                i = -1
+                prior_high = high.iloc[-21:-1].max() # 前20日高點
+
+                # 各項條件判定
+                breakout_ok = (close.iloc[i] > prior_high) and (close.iloc[i] > open_p.iloc[i]) and (close.iloc[i] >= open_p.iloc[i] * 1.03)
+                trend_ok = (ema5.iloc[i] > ema20.iloc[i]) and (ema5.iloc[i] > ema5.iloc[i-1]) and (ema20.iloc[i] > ema20.iloc[i-1]) and (close.iloc[i] > ema5.iloc[i])
+                volume_ok = (volume.iloc[i] >= mavol5.iloc[i] * 2.0) and (mavol5.iloc[i] >= mavol10.iloc[i])
+                macd_ok = (dif.iloc[i] > macd.iloc[i]) and (osc.iloc[i] > 0) and (osc.iloc[i] > osc.iloc[i-1])
+                dmi_ok = (plus_di.iloc[i] > minus_di.iloc[i]) and (adx.iloc[i] >= 20) and (adx.iloc[i] > adx.iloc[i-1])
+                obv_ok = (obv.iloc[i] > obv.iloc[i-1]) and (obv.iloc[i] > obv.iloc[i-5:i].mean())
+                rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 85) and (rsi3.iloc[i] < 95)
+                gap_ratio = close.iloc[i] / ema5.iloc[i] if ema5.iloc[i] > 0 else 0
+                price_ok = (gap_ratio > 1.0) and (gap_ratio <= 1.08)
+
+                is_selected = bool(breakout_ok and trend_ok and volume_ok and macd_ok and dmi_ok and obv_ok and rsi_ok and price_ok)
+
+                # --- 顯示結果到手機介面 ---
+                st.subheader(f"📊 股票代號：{stock_input.upper()} 檢視結果")
+                
+                if is_selected:
+                    st.success("🎉 【符合】此檔股票符合 V4 強勢多頭突破進場條件！")
+                else:
+                    st.warning("⚠️ 【不符合】目前未達到 V4 的全面突破標準。")
+
+                # 展開各項細節數據供核對
+                with st.expander("查看詳細技術指標數據"):
+                    st.write(f"- 收盤價: {round(close.iloc[i], 2)} (前20日高: {round(prior_high, 2)}) -> 突破: {'✅' if breakout_ok else '❌'}")
+                    st.write(f"- 均線多頭 (EMA5>EMA20): {'✅' if trend_ok else '❌'}")
+                    st.write(f"- 成交量放大 (>= 2倍5日均量): {'✅' if volume_ok else '❌'}")
+                    st.write(f"- MACD 動能增強: {'✅' if macd_ok else '❌'}")
+                    st.write(f"- DMI 趨勢 (+DI > -DI, ADX>20): {'✅' if dmi_ok else '❌'}")
+                    st.write(f"- OBV 籌碼向上: {'✅' if obv_ok else '❌'}")
+                    st.write(f"- RSI 區間 (50~85): {'✅' if rsi_ok else '❌'}")
+                    st.write(f"- 乖離率控制 (收盤/EMA5 <= 1.08): {'✅' if price_ok else '❌'}")
+
+        except Exception as e:
+                st.error(f"發生錯誤，請確認股票代號是否正確或稍後再試。詳細錯誤: {e}")
