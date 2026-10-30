@@ -88,7 +88,7 @@ if st.button("開始判斷"):
                 volume_ok = (volume.iloc[i] >= mavol5.iloc[i] * 2.0) and (mavol5.iloc[i] >= mavol10.iloc[i])
                 macd_ok = (dif.iloc[i] > macd.iloc[i]) and (osc.iloc[i] > 0) and (osc.iloc[i] > osc.iloc[i-1])
                 obv_ok = (obv.iloc[i] > obv.iloc[i-1]) and (obv.iloc[i] > obv.iloc[i-5:i].mean())
-                rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 85) and (rsi3.iloc[i] <= 99)
+                rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 99) and (rsi3.iloc[i] < 99)
                 gap_ratio = close.iloc[i] / ema5.iloc[i] if ema5.iloc[i] > 0 else 0
                 price_ok = (gap_ratio > 1.0) and (gap_ratio <= 1.15)
 
