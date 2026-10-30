@@ -66,19 +66,8 @@ if st.button("開始判斷"):
                 macd = dif.ewm(span=2, adjust=False).mean()
                 osc = (dif - macd) * 2
 
-                # 5. DMI
-                plus_dm = high.diff()
-                minus_dm = low.diff()
-                plus_dm = np.where((plus_dm > minus_dm) & (plus_dm > 0), plus_dm, 0.0)
-                minus_dm = np.where((minus_dm > plus_dm) & (minus_dm > 0), minus_dm, 0.0)
-                tr = pd.concat([high - low, abs(high - close.shift(1)), abs(low - close.shift(1))], axis=1).max(axis=1)
-                atr = tr.rolling(window=10).mean()
-                plus_di = 100 * (pd.Series(plus_dm).rolling(window=10).mean() / atr)
-                minus_di = 100 * (pd.Series(minus_dm).rolling(window=10).mean() / atr)
-                dx = 100 * np.abs(plus_di - minus_di) / (plus_di + minus_di)
-                adx = dx.rolling(window=10).mean()
-
-                # 6. OBV
+                
+                # 5. OBV
                 obv = (np.sign(close.diff()) * volume).fillna(0).cumsum()
 
                 # 取最後一天數據
