@@ -5,10 +5,10 @@ import yfinance as yf
 
 # 網頁標題與介面設計
 st.title("📱 V4 策略手機選股判斷器")
-st.write("輸入台股代號（例如：2330.TW、4568.TWO），立刻為您檢視是否符合強勢突破條件！")
+st.write("輸入台股代號（例如：2330、4568），立刻為您檢視是否符合強勢突破條件！")
 
 # 使用者輸入股票代號
-stock_input = st.text_input("請輸入台股代號 (例如 2330.TW):", "2330.TW")
+stock_input = st.text_input("請輸入台股代號 (例如 2330):", "2330")
 
 if st.button("開始判斷"):
     with st.spinner('正在抓取資料並計算指標中...'):
