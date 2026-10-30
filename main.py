@@ -13,13 +13,25 @@ stock_input = st.text_input("請輸入台股代號 (例如 2330):", "2330")
 if st.button("開始判斷"):
     with st.spinner('正在抓取資料並計算指標中...'):
         try:
-            # 自動補上 Yahoo Finance 的台股代號格式 (.TW)
-            ticker = stock_input.strip()
-            if not ticker.endswith(".TW") and not ticker.endswith(".TWO"):
-                # 預設先試 .TW，若不行可自行調整
-                symbol = f"{ticker}.TW" 
+            # 清理使用者輸入的代號
+            ticker = stock_input.strip().upper()
+            
+            # 建立要嘗試下載的清單（如果使用者沒加後綴，則依序嘗試上市 .TW 與上櫃 .TWO）
+            if ticker.endswith(".TW") or ticker.endswith(".TWO"):
+                symbols_to_try = [ticker]
             else:
-                symbol = ticker
+                symbols_to_try = [f"{ticker}.TW", f"{ticker}.TWO"]
+            
+            df = pd.DataFrame()
+            used_symbol = ""
+            
+            # 依序嘗試下載，直到成功抓取足夠的資料為止
+            for sym in symbols_to_try:
+                temp_df = yf.download(sym, period="1y", interval="1d", progress=False)
+                if not temp_df.empty and len(temp_df) >= 120:
+                    df = temp_df
+                    used_symbol = sym
+                    break
                 
             # 下載最近 1 年的日K資料
             df = yf.download(symbol, period="1y", interval="1d")
