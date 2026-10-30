@@ -5,27 +5,22 @@ import yfinance as yf
 
 # 網頁標題與介面設計
 st.title("📱 V4 策略手機選股判斷器")
-st.write("輸入台股代號（例如：2330、2454），立刻為您檢視是否符合強勢突破條件！")
+st.write("輸入台股代號（例如：2330.TW、4568.TWO），立刻為您檢視是否符合強勢突破條件！")
 
 # 使用者輸入股票代號
-stock_input = st.text_input("請輸入台股代號 (例如 2330):", "2330")
+stock_input = st.text_input("請輸入台股代號 (例如 2330.TW):", "2330.TW")
 
 if st.button("開始判斷"):
     with st.spinner('正在抓取資料並計算指標中...'):
         try:
-            # 自動補上 Yahoo Finance 的台股代號格式 (.TW)
-            ticker = stock_input.strip()
-            if not ticker.endswith(".TW") and not ticker.endswith(".TWO"):
-                # 預設先試 .TW，若不行可自行調整
-                symbol = f"{ticker}.TW" 
-            else:
-                symbol = ticker
-                
+            # 直接使用使用者輸入的代號進行查詢
+            symbol = stock_input.strip()
+            
             # 下載最近 1 年的日K資料
-            df = yf.download(symbol, period="1y", interval="1d")
+            df = yf.download(symbol, period="1y", interval="1d", progress=False)
             
             if df.empty or len(df) < 120:
-                st.error("找不到該股票資料，或歷史資料不足 120 天，請確認代號是否正確。")
+                st.error("找不到該股票資料，或歷史資料不足 120 天，請確認代號與後綴（如 .TW 或 .TWO）是否正確。")
             else:
                 # 修正 MultiIndex 欄位問題（yfinance常見格式）
                 if isinstance(df.columns, pd.MultiIndex):
@@ -66,19 +61,7 @@ if st.button("開始判斷"):
                 macd = dif.ewm(span=2, adjust=False).mean()
                 osc = (dif - macd) * 2
 
-                # 5. DMI
-                plus_dm = high.diff()
-                minus_dm = low.diff()
-                plus_dm = np.where((plus_dm > minus_dm) & (plus_dm > 0), plus_dm, 0.0)
-                minus_dm = np.where((minus_dm > plus_dm) & (minus_dm > 0), minus_dm, 0.0)
-                tr = pd.concat([high - low, abs(high - close.shift(1)), abs(low - close.shift(1))], axis=1).max(axis=1)
-                atr = tr.rolling(window=10).mean()
-                plus_di = 100 * (pd.Series(plus_dm).rolling(window=10).mean() / atr)
-                minus_di = 100 * (pd.Series(minus_dm).rolling(window=10).mean() / atr)
-                dx = 100 * np.abs(plus_di - minus_di) / (plus_di + minus_di)
-                adx = dx.rolling(window=10).mean()
-
-                # 6. OBV
+                # 5. OBV
                 obv = (np.sign(close.diff()) * volume).fillna(0).cumsum()
 
                 # 取最後一天數據
@@ -90,16 +73,19 @@ if st.button("開始判斷"):
                 trend_ok = (ema5.iloc[i] > ema20.iloc[i]) and (ema5.iloc[i] > ema5.iloc[i-1]) and (ema20.iloc[i] > ema20.iloc[i-1]) and (close.iloc[i] > ema5.iloc[i])
                 volume_ok = (volume.iloc[i] >= mavol5.iloc[i] * 2.0) and (mavol5.iloc[i] >= mavol10.iloc[i])
                 macd_ok = (dif.iloc[i] > macd.iloc[i]) and (osc.iloc[i] > 0) and (osc.iloc[i] > osc.iloc[i-1])
-                dmi_ok = (plus_di.iloc[i] > minus_di.iloc[i]) and (adx.iloc[i] >= 20) and (adx.iloc[i] > adx.iloc[i-1])
                 obv_ok = (obv.iloc[i] > obv.iloc[i-1]) and (obv.iloc[i] > obv.iloc[i-5:i].mean())
-                rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 85) and (rsi3.iloc[i] < 95)
+                
+                # RSI 區間條件 (RSI6 >= 50 且 <= 85，RSI3 支援至 99)
+                rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 85) and (rsi3.iloc[i] <= 99)
+                
+                # 乖離率條件 (收盤/EMA5 <= 1.15)
                 gap_ratio = close.iloc[i] / ema5.iloc[i] if ema5.iloc[i] > 0 else 0
-                price_ok = (gap_ratio > 1.0) and (gap_ratio <= 1.08)
+                price_ok = (gap_ratio > 1.0) and (gap_ratio <= 1.15)
 
-                is_selected = bool(breakout_ok and trend_ok and volume_ok and macd_ok and dmi_ok and obv_ok and rsi_ok and price_ok)
+                is_selected = bool(breakout_ok and trend_ok and volume_ok and macd_ok and obv_ok and rsi_ok and price_ok)
 
                 # --- 顯示結果到手機介面 ---
-                st.subheader(f"📊 股票代號：{stock_input.upper()} 檢視結果")
+                st.subheader(f"📊 股票代號：{symbol.upper()} 檢視結果")
                 
                 if is_selected:
                     st.success("🎉 【符合】此檔股票符合 V4 強勢多頭突破進場條件！")
@@ -112,10 +98,9 @@ if st.button("開始判斷"):
                     st.write(f"- 均線多頭 (EMA5>EMA20): {'✅' if trend_ok else '❌'}")
                     st.write(f"- 成交量放大 (>= 2倍5日均量): {'✅' if volume_ok else '❌'}")
                     st.write(f"- MACD 動能增強: {'✅' if macd_ok else '❌'}")
-                    st.write(f"- DMI 趨勢 (+DI > -DI, ADX>20): {'✅' if dmi_ok else '❌'}")
                     st.write(f"- OBV 籌碼向上: {'✅' if obv_ok else '❌'}")
-                    st.write(f"- RSI 區間 (50~85): {'✅' if rsi_ok else '❌'}")
-                    st.write(f"- 乖離率控制 (收盤/EMA5 <= 1.08): {'✅' if price_ok else '❌'}")
+                    st.write(f"- RSI 區間 (50~99): {'✅' if rsi_ok else '❌'}")
+                    st.write(f"- 乖離率控制 (收盤/EMA5 <= 1.15): {'✅' if price_ok else '❌'}")
 
         except Exception as e:
-                st.error(f"發生錯誤，請確認股票代號是否正確或稍後再試。詳細錯誤: {e}")
+            st.error(f"發生錯誤，請確認股票代號是否正確或稍後再試。詳細錯誤: {e}")
