@@ -13,9 +13,9 @@ stock_input = st.text_input("請輸入台股代號 (例如 2330):", "2330")
 if st.button("開始判斷"):
     with st.spinner('正在抓取資料並計算指標中...'):
         try:
-            # 自動補上 Yahoo Finance 的台股代號格式 (.TW)
+            # 自動補上 Yahoo Finance 的台股代號格式 
             ticker = stock_input.strip()
-            if not ticker.endswith(".TW") and not ticker.endswith(".TWO"):
+    
                 # 預設先試 .TW，若不行可自行調整
                 symbol = f"{ticker}.TW" 
             else:
