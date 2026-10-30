@@ -5,10 +5,10 @@ import yfinance as yf
 
 # 網頁標題與介面設計
 st.title("📱 V4 策略手機選股判斷器")
-st.write("輸入台股代號（例如：2330.TW、4568.TWO），立刻為您檢視是否符合強勢突破條件！")
+st.write("輸入台股代號（例如：4568），立刻為您檢視是否符合強勢突破條件！")
 
 # 使用者輸入股票代號
-stock_input = st.text_input("請輸入台股代號 (例如 2330.TW):", "2330.TW")
+stock_input = st.text_input("請輸入台股代號 (例如 2330):", "2330")
 
 if st.button("開始判斷"):
     with st.spinner('正在抓取資料並計算指標中...'):
@@ -20,7 +20,7 @@ if st.button("開始判斷"):
             df = yf.download(symbol, period="1y", interval="1d", progress=False)
             
             if df.empty or len(df) < 120:
-                st.error("找不到該股票資料，或歷史資料不足 120 天，請確認代號與後綴（如 .TW 或 .TWO）是否正確。")
+                st.error("找不到該股票資料，或歷史資料不足 120 天，請確認代號是否正確。")
             else:
                 # 修正 MultiIndex 欄位問題（yfinance常見格式）
                 if isinstance(df.columns, pd.MultiIndex):
@@ -75,8 +75,8 @@ if st.button("開始判斷"):
                 macd_ok = (dif.iloc[i] > macd.iloc[i]) and (osc.iloc[i] > 0) and (osc.iloc[i] > osc.iloc[i-1])
                 obv_ok = (obv.iloc[i] > obv.iloc[i-1]) and (obv.iloc[i] > obv.iloc[i-5:i].mean())
                 
-                # RSI 區間條件 (RSI6 >= 50 且 <= 85，RSI3 支援至 99)
-                rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 85) and (rsi3.iloc[i] <= 99)
+                # RSI 區間條件 (RSI6 >= 50 且 <= 99，RSI3 支援至 101)
+                rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 99) and (rsi3.iloc[i] <= 99)
                 
                 # 乖離率條件 (收盤/EMA5 <= 1.15)
                 gap_ratio = close.iloc[i] / ema5.iloc[i] if ema5.iloc[i] > 0 else 0
