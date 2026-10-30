@@ -4,11 +4,11 @@ import numpy as np
 import yfinance as yf
 
 # 網頁標題與介面設計
-st.title("📱 V4 策略手機選股判斷器")
+st.title("📱 逢茗手機選股判斷器")
 st.write("輸入台股代號（例如：4568），立刻為您檢視是否符合強勢突破條件！")
 
 # 使用者輸入股票代號
-stock_input = st.text_input("請輸入台股代號 (例如 2330):", "2330")
+stock_input = st.text_input("請輸入台股代號 (例如 4568):", "4568")
 
 if st.button("開始判斷"):
     with st.spinner('正在抓取資料並計算指標中...'):
@@ -26,7 +26,7 @@ if st.button("開始判斷"):
                 if isinstance(df.columns, pd.MultiIndex):
                     df.columns = df.columns.get_level_values(0)
                 
-                # --- 開始 V4 策略計算邏輯 ---
+                # --- 開始 逢茗策略計算邏輯 ---
                 close = df['Close']
                 high = df['High']
                 low = df['Low']
