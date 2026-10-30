@@ -112,10 +112,10 @@ if st.button("開始判斷"):
                     st.write(f"- 均線多頭 (EMA5>EMA20): {'✅' if trend_ok else '❌'}")
                     st.write(f"- 成交量放大 (>= 2倍5日均量): {'✅' if volume_ok else '❌'}")
                     st.write(f"- MACD 動能增強: {'✅' if macd_ok else '❌'}")
-                    st.write(f"- DMI 趨勢 (+DI > -DI, ADX>20): {'✅' if dmi_ok else '❌'}")
+                             
                     st.write(f"- OBV 籌碼向上: {'✅' if obv_ok else '❌'}")
-                    st.write(f"- RSI 區間 (50~85): {'✅' if rsi_ok else '❌'}")
-                    st.write(f"- 乖離率控制 (收盤/EMA5 <= 1.08): {'✅' if price_ok else '❌'}")
+                    st.write(f"- RSI 區間 (50~110): {'✅' if rsi_ok else '❌'}")
+                    st.write(f"- 乖離率控制 (收盤/EMA5 <=1.15): {'✅' if price_ok else '❌'}")
 
         except Exception as e:
                 st.error(f"發生錯誤，請確認股票代號是否正確或稍後再試。詳細錯誤: {e}")
