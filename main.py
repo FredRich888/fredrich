@@ -1,11 +1,11 @@
-import streamlit as st
+ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
 
 # 網頁標題與介面設計
-st.title("📱 V4 策略手機選股判斷器")
-st.write("輸入台股代號（例如：2330、4568），立刻為您檢視是否符合強勢突破條件！")
+st.title("📱 逢茗手機選股判斷器")
+st.write("輸入台股代號（例如：4568、2330），立刻為您檢視是否符合強勢突破條件！")
 
 # 使用者輸入股票代號
 stock_input = st.text_input("請輸入台股代號 (例如 4568):", "4568")
@@ -16,6 +16,7 @@ if st.button("開始判斷"):
             # 清理使用者輸入的代號
             ticker = stock_input.strip().upper()
             
+            # 自動判斷上市 (.TW) 或上櫃 (.TWO)
             if ticker.endswith(".TW") or ticker.endswith(".TWO"):
                 symbols_to_try = [ticker]
             else:
@@ -40,7 +41,7 @@ if st.button("開始判斷"):
                 if isinstance(df.columns, pd.MultiIndex):
                     df.columns = df.columns.get_level_values(0)
                 
-                # --- 開始 V4 策略計算邏輯 ---
+                # --- 開始 逢茗策略計算邏輯 ---
                 close = df['Close']
                 high = df['High']
                 low = df['Low']
@@ -56,12 +57,15 @@ if st.button("開始判斷"):
                 mavol5 = volume.rolling(window=5).mean()
                 mavol10 = volume.rolling(window=10).mean()
 
-                # 3. RSI
+                # 3. RSI (修正為標準 Wilder 平滑法，數值與 XQ 完全同步)
                 def calc_rsi(series, period):
                     delta = series.diff()
-                    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-                    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-                    rs = gain / loss
+                    gain = delta.where(delta > 0, 0.0)
+                    loss = -delta.where(delta < 0, 0.0)
+                    # Wilder's Smoothing (alpha = 1 / period)
+                    avg_gain = gain.ewm(alpha=1/period, adjust=False).mean()
+                    avg_loss = loss.ewm(alpha=1/period, adjust=False).mean()
+                    rs = avg_gain / avg_loss
                     return 100 - (100 / (1 + rs))
 
                 rsi3 = calc_rsi(close, 3)
@@ -89,8 +93,10 @@ if st.button("開始判斷"):
                 macd_ok = (dif.iloc[i] > macd.iloc[i]) and (osc.iloc[i] > 0) and (osc.iloc[i] > osc.iloc[i-1])
                 obv_ok = (obv.iloc[i] > obv.iloc[i-1]) and (obv.iloc[i] > obv.iloc[i-5:i].mean())
                 
-                rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 90) and (rsi3.iloc[i] < 95)
+                # 修正後的 RSI 區間判定條件 (符合強勢高檔區間)
+                rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 99) and (rsi3.iloc[i] <= 100)
                 
+                # 乖離率條件 (收盤/EMA5 < 1.13)
                 gap_ratio = close.iloc[i] / ema5.iloc[i] if ema5.iloc[i] > 0 else 0
                 price_ok = (gap_ratio > 1.0) and (gap_ratio < 1.13)
 
@@ -108,9 +114,9 @@ if st.button("開始判斷"):
                 with st.expander("🔍 點此查看實際計算數值與對比"):
                     st.write(f"• **收盤價**: {round(close.iloc[i], 2)}  | 前20高: {round(prior_high, 2)} -> 突破: {'✅' if breakout_ok else '❌'}")
                     st.write(f"• **EMA5**: {round(ema5.iloc[i], 2)}  | EMA20: {round(ema20.iloc[i], 2)}  -> 多頭: {'✅' if trend_ok else '❌'}")
-                    st.write(f"• **成交量**: {volume.iloc[i]}  | 5日均量: {round(mavol5.iloc[i], 1)} ) -> 量增: {'✅' if volume_ok else '❌'}")
-                    st.write(f"• **MACD(DIF-MACD)**: DIF={round(dif.iloc[i], 2)}, MACD={round(macd.iloc[i], 2)}, OSC={round(osc.iloc[i], 2)} (OSC: 0.31) -> 動能: {'✅' if macd_ok else '❌'}")
-                    st.write(f"• **OBV**: {round(obv.iloc[i], 0)}) -> 向上: {'✅' if obv_ok else '❌'}")
+                    st.write(f"• **成交量**: {int(volume.iloc[i])}  | 5日均量: {round(mavol5.iloc[i], 1)} -> 量增: {'✅' if volume_ok else '❌'}")
+                    st.write(f"• **MACD(DIF-MACD)**: DIF={round(dif.iloc[i], 2)}, MACD={round(macd.iloc[i], 2)}, OSC={round(osc.iloc[i], 2)} -> 動能: {'✅' if macd_ok else '❌'}")
+                    st.write(f"• **OBV**: {round(obv.iloc[i], 0)} -> 向上: {'✅' if obv_ok else '❌'}")
                     st.write(f"• **RSI**: RSI3={round(rsi3.iloc[i], 2)}% , RSI6={round(rsi6.iloc[i], 2)}%  -> 區間: {'✅' if rsi_ok else '❌'}")
                     st.write(f"• **乖離率**: 收盤/EMA5 = {round(gap_ratio, 3)} (<1.13) -> 控制: {'✅' if price_ok else '❌'}")
 
