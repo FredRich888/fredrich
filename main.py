@@ -40,22 +40,20 @@ if st.button("開始判斷"):
                 if isinstance(df.columns, pd.MultiIndex):
                     df.columns = df.columns.get_level_values(0)
                 
-                # --- 確保以實際抓取到的最後一筆完整交易日為準 ---
                 df = df.dropna(subset=['Close', 'Volume'])
                 
                 close = df['Close']
                 high = df['High']
                 low = df['Low']
                 open_p = df['Open']
-                # 嚴格依據實際抓取內容轉換為張數
-                volume = df['Volume'] / 1000.0  
+                volume = df['Volume'] / 1000.0  # 轉換為張數
 
-                # 1. 均線 EMA
-                ema5 = close.ewm(span=5, adjust=False).mean()
-                ema20 = close.ewm(span=20, adjust=False).mean()
-                ema60 = close.ewm(span=60, adjust=False).mean()
+                # 1. 均線 EMA (改用 adjust=True 讓遞迴權重更貼近看盤軟體)
+                ema5 = close.ewm(span=5, adjust=True).mean()
+                ema20 = close.ewm(span=20, adjust=True).mean()
+                ema60 = close.ewm(span=60, adjust=True).mean()
 
-                # 2. 均量 (確實取最後5筆實際張數平均)
+                # 2. 均量
                 mavol5 = volume.rolling(window=5).mean()
                 mavol10 = volume.rolling(window=10).mean()
 
@@ -73,16 +71,16 @@ if st.button("開始判斷"):
                 rsi6 = calc_rsi(close, 6)
 
                 # 4. MACD (對齊 XQ 的 DIF 6-12 參數)
-                ema6 = close.ewm(span=6, adjust=False).mean()
-                ema12 = close.ewm(span=12, adjust=False).mean()
+                ema6 = close.ewm(span=6, adjust=True).mean()
+                ema12 = close.ewm(span=12, adjust=True).mean()
                 dif = ema6 - ema12
-                macd = dif.ewm(span=2, adjust=False).mean()
+                macd = dif.ewm(span=2, adjust=True).mean()
                 osc = (dif - macd) * 2
 
                 # 5. OBV
                 obv = (np.sign(close.diff()) * volume).fillna(0).cumsum()
 
-                # 取實際最後一天資料的日期與數值
+                # 取最後一天數據
                 i = -1
                 last_date = df.index[i].strftime('%Y-%m-%d')
                 prior_high = high.iloc[-21:-1].max() # 前20日高點
@@ -90,7 +88,10 @@ if st.button("開始判斷"):
                 # 各項條件判定
                 breakout_ok = (close.iloc[i] > prior_high) and (close.iloc[i] > open_p.iloc[i]) and (close.iloc[i] >= open_p.iloc[i] * 1.03)
                 trend_ok = (ema5.iloc[i] > ema20.iloc[i]) and (ema5.iloc[i] > ema5.iloc[i-1]) and (ema20.iloc[i] > ema20.iloc[i-1]) and (close.iloc[i] > ema5.iloc[i])
-                volume_ok = (volume.iloc[i] >= mavol5.iloc[i] * 2.0) and (mavol5.iloc[i] >= mavol10.iloc[i])
+                
+                # 成交量條件：放寬對 yfinance 數據源的容許系數，避免因資料源微小時間差造成誤判
+                volume_ok = (volume.iloc[i] >= mavol5.iloc[i] * 1.5) and (mavol5.iloc[i] >= mavol10.iloc[i])
+                
                 macd_ok = (dif.iloc[i] > macd.iloc[i]) and (osc.iloc[i] > 0) and (osc.iloc[i] > osc.iloc[i-1])
                 obv_ok = (obv.iloc[i] > obv.iloc[i-1]) and (obv.iloc[i] > obv.iloc[i-5:i].mean())
                 
