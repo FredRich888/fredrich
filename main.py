@@ -15,7 +15,7 @@ if st.button("開始判斷"):
         try:
             ticker = stock_input.strip().upper()
             
-            # 自動判斷上市櫃排序
+            # 自動判斷上市櫃排序 (.TWO 優先於 .TW)
             if ticker.endswith(".TW") or ticker.endswith(".TWO"):
                 symbols_to_try = [ticker]
             else:
@@ -40,19 +40,22 @@ if st.button("開始判斷"):
                 if isinstance(df.columns, pd.MultiIndex):
                     df.columns = df.columns.get_level_values(0)
                 
-                # --- 開始 逢茗策略計算邏輯 ---
+                # --- 確保以實際抓取到的最後一筆完整交易日為準 ---
+                df = df.dropna(subset=['Close', 'Volume'])
+                
                 close = df['Close']
                 high = df['High']
                 low = df['Low']
                 open_p = df['Open']
-                volume = df['Volume'] / 1000.0  # 轉換為張數
+                # 嚴格依據實際抓取內容轉換為張數
+                volume = df['Volume'] / 1000.0  
 
-                # 1. 均線 EMA (使用 adjust=True 或標準算法對齊)
-                ema5 = close.ewm(span=5, adjust=True).mean()
-                ema20 = close.ewm(span=20, adjust=True).mean()
-                ema60 = close.ewm(span=60, adjust=True).mean()
+                # 1. 均線 EMA
+                ema5 = close.ewm(span=5, adjust=False).mean()
+                ema20 = close.ewm(span=20, adjust=False).mean()
+                ema60 = close.ewm(span=60, adjust=False).mean()
 
-                # 2. 均量
+                # 2. 均量 (確實取最後5筆實際張數平均)
                 mavol5 = volume.rolling(window=5).mean()
                 mavol10 = volume.rolling(window=10).mean()
 
@@ -69,18 +72,19 @@ if st.button("開始判斷"):
                 rsi3 = calc_rsi(close, 3)
                 rsi6 = calc_rsi(close, 6)
 
-                # 4. MACD (對齊 XQ 的 DIF 6-12 參數與計算法)
-                ema6 = close.ewm(span=6, adjust=True).mean()
-                ema12 = close.ewm(span=12, adjust=True).mean()
+                # 4. MACD (對齊 XQ 的 DIF 6-12 參數)
+                ema6 = close.ewm(span=6, adjust=False).mean()
+                ema12 = close.ewm(span=12, adjust=False).mean()
                 dif = ema6 - ema12
-                macd = dif.ewm(span=2, adjust=True).mean()
+                macd = dif.ewm(span=2, adjust=False).mean()
                 osc = (dif - macd) * 2
 
                 # 5. OBV
                 obv = (np.sign(close.diff()) * volume).fillna(0).cumsum()
 
-                # 取最後一天數據
+                # 取實際最後一天資料的日期與數值
                 i = -1
+                last_date = df.index[i].strftime('%Y-%m-%d')
                 prior_high = high.iloc[-21:-1].max() # 前20日高點
 
                 # 各項條件判定
@@ -98,14 +102,14 @@ if st.button("開始判斷"):
                 is_selected = bool(breakout_ok and trend_ok and volume_ok and macd_ok and obv_ok and rsi_ok and price_ok)
 
                 # --- 顯示結果到手機介面 ---
-                st.subheader(f"📊 股票代號：{used_symbol} 檢視結果")
+                st.subheader(f"📊 股票代號：{used_symbol} (資料日期: {last_date})")
                 
                 if is_selected:
                     st.success("🎉 【符合】此檔股票符合 V4 強勢多頭突破進場條件！")
                 else:
                     st.warning("⚠️ 【不符合】目前未達到 V4 的全面突破標準。")
 
-                # 展開各項細節數據與實際數值供核對
+                # 展開各項實際計算數值供核對
                 with st.expander("🔍 點此查看實際計算數值與對比"):
                     st.write(f"• **收盤價**: {round(close.iloc[i], 2)}  | 前20高: {round(prior_high, 2)} -> 突破: {'✅' if breakout_ok else '❌'}")
                     st.write(f"• **EMA5**: {round(ema5.iloc[i], 2)}  | EMA20: {round(ema20.iloc[i], 2)}  -> 多頭: {'✅' if trend_ok else '❌'}")
