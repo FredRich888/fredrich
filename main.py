@@ -46,14 +46,16 @@ if st.button("開始判斷"):
                 high = df['High']
                 low = df['Low']
                 open_p = df['Open']
-                volume = df['Volume']
+                
+                # 將 Yahoo Finance 的「股」轉換為台股常用的「張」（除以 1000）
+                volume = df['Volume'] / 1000.0
 
                 # 1. 均線 EMA
                 ema5 = close.ewm(span=5, adjust=False).mean()
                 ema20 = close.ewm(span=20, adjust=False).mean()
                 ema60 = close.ewm(span=60, adjust=False).mean()
 
-                # 2. 均量
+                # 2. 均量 (現在單位為「張」，會跟 XQ 的 MA5 完全對齊)
                 mavol5 = volume.rolling(window=5).mean()
                 mavol10 = volume.rolling(window=10).mean()
 
@@ -70,12 +72,11 @@ if st.button("開始判斷"):
                 rsi3 = calc_rsi(close, 3)
                 rsi6 = calc_rsi(close, 6)
 
-                # 4. MACD
-                w_close = (high + low + close * 2) / 4
-                ema6 = w_close.ewm(span=6, adjust=False).mean()
-                ema12 = w_close.ewm(span=12, adjust=False).mean()
-                dif = ema6 - ema12
-                macd = dif.ewm(span=2, adjust=False).mean()
+                # 4. MACD (使用標準收盤價計算，貼近 XQ 數值)
+                ema12 = close.ewm(span=12, adjust=False).mean()
+                ema26 = close.ewm(span=26, adjust=False).mean()
+                dif = ema12 - ema26
+                macd = dif.ewm(span=9, adjust=False).mean()
                 osc = (dif - macd) * 2
 
                 # 5. OBV
@@ -113,7 +114,7 @@ if st.button("開始判斷"):
                 with st.expander("🔍 點此查看實際計算數值與對比"):
                     st.write(f"• **收盤價**: {round(close.iloc[i], 2)}  | 前20高: {round(prior_high, 2)} -> 突破: {'✅' if breakout_ok else '❌'}")
                     st.write(f"• **EMA5**: {round(ema5.iloc[i], 2)}  | EMA20: {round(ema20.iloc[i], 2)}  -> 多頭: {'✅' if trend_ok else '❌'}")
-                    st.write(f"• **成交量**: {int(volume.iloc[i])}  | 5日均量: {round(mavol5.iloc[i], 1)} -> 量增: {'✅' if volume_ok else '❌'}")
+                    st.write(f"• **成交量**: {round(volume.iloc[i], 1)} 張 | 5日均量: {round(mavol5.iloc[i], 1)} 張 -> 量增: {'✅' if volume_ok else '❌'}")
                     st.write(f"• **MACD(DIF-MACD)**: DIF={round(dif.iloc[i], 2)}, MACD={round(macd.iloc[i], 2)}, OSC={round(osc.iloc[i], 2)} -> 動能: {'✅' if macd_ok else '❌'}")
                     st.write(f"• **OBV**: {round(obv.iloc[i], 0)} -> 向上: {'✅' if obv_ok else '❌'}")
                     st.write(f"• **RSI**: RSI3={round(rsi3.iloc[i], 2)}% , RSI6={round(rsi6.iloc[i], 2)}%  -> 區間: {'✅' if rsi_ok else '❌'}")
