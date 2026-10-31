@@ -106,12 +106,12 @@ if st.button("開始判斷"):
 
                 # 展開各項細節數據與「實際數值」供核對
                 with st.expander("🔍 點此查看實際計算數值與對比"):
-                    st.write(f"• **收盤價**: {round(close.iloc[i], 2)} (XQ: 51.8) | 前20高: {round(prior_high, 2)} -> 突破: {'✅' if breakout_ok else '❌'}")
-                    st.write(f"• **EMA5**: {round(ema5.iloc[i], 2)} (XQ: 46.44) | EMA20: {round(ema20.iloc[i], 2)} (XQ: 42.37) -> 多頭: {'✅' if trend_ok else '❌'}")
-                    st.write(f"• **成交量**: {volume.iloc[i]} (XQ: 354) | 5日均量: {round(mavol5.iloc[i], 1)} (XQ: 117) -> 量增: {'✅' if volume_ok else '❌'}")
-                    st.write(f"• **MACD(DIF-MACD)**: DIF={round(dif.iloc[i], 2)}, MACD={round(macd.iloc[i], 2)}, OSC={round(osc.iloc[i], 2)} (XQ OSC: 0.31) -> 動能: {'✅' if macd_ok else '❌'}")
-                    st.write(f"• **OBV**: {round(obv.iloc[i], 0)} (XQ: 675) -> 向上: {'✅' if obv_ok else '❌'}")
-                    st.write(f"• **RSI**: RSI3={round(rsi3.iloc[i], 2)}% ( 95%), RSI6={round(rsi6.iloc[i], 2)}% (90%) -> 區間: {'✅' if rsi_ok else '❌'}")
+                    st.write(f"• **收盤價**: {round(close.iloc[i], 2)}  | 前20高: {round(prior_high, 2)} -> 突破: {'✅' if breakout_ok else '❌'}")
+                    st.write(f"• **EMA5**: {round(ema5.iloc[i], 2)}  | EMA20: {round(ema20.iloc[i], 2)}  -> 多頭: {'✅' if trend_ok else '❌'}")
+                    st.write(f"• **成交量**: {volume.iloc[i]}  | 5日均量: {round(mavol5.iloc[i], 1)} ) -> 量增: {'✅' if volume_ok else '❌'}")
+                    st.write(f"• **MACD(DIF-MACD)**: DIF={round(dif.iloc[i], 2)}, MACD={round(macd.iloc[i], 2)}, OSC={round(osc.iloc[i], 2)} (OSC: 0.31) -> 動能: {'✅' if macd_ok else '❌'}")
+                    st.write(f"• **OBV**: {round(obv.iloc[i], 0)}) -> 向上: {'✅' if obv_ok else '❌'}")
+                    st.write(f"• **RSI**: RSI3={round(rsi3.iloc[i], 2)}% , RSI6={round(rsi6.iloc[i], 2)}%  -> 區間: {'✅' if rsi_ok else '❌'}")
                     st.write(f"• **乖離率**: 收盤/EMA5 = {round(gap_ratio, 3)} (<1.13) -> 控制: {'✅' if price_ok else '❌'}")
 
         except Exception as e:
