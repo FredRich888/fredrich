@@ -1,4 +1,4 @@
- import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -57,12 +57,11 @@ if st.button("開始判斷"):
                 mavol5 = volume.rolling(window=5).mean()
                 mavol10 = volume.rolling(window=10).mean()
 
-                # 3. RSI (修正為標準 Wilder 平滑法，數值與 XQ 完全同步)
+                # 3. RSI (標準 Wilder 平滑法)
                 def calc_rsi(series, period):
                     delta = series.diff()
                     gain = delta.where(delta > 0, 0.0)
                     loss = -delta.where(delta < 0, 0.0)
-                    # Wilder's Smoothing (alpha = 1 / period)
                     avg_gain = gain.ewm(alpha=1/period, adjust=False).mean()
                     avg_loss = loss.ewm(alpha=1/period, adjust=False).mean()
                     rs = avg_gain / avg_loss
@@ -93,10 +92,10 @@ if st.button("開始判斷"):
                 macd_ok = (dif.iloc[i] > macd.iloc[i]) and (osc.iloc[i] > 0) and (osc.iloc[i] > osc.iloc[i-1])
                 obv_ok = (obv.iloc[i] > obv.iloc[i-1]) and (obv.iloc[i] > obv.iloc[i-5:i].mean())
                 
-                # 修正後的 RSI 區間判定條件 (符合強勢高檔區間)
+                # RSI 區間判定條件
                 rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 99) and (rsi3.iloc[i] <= 100)
                 
-                # 乖離率條件 (收盤/EMA5 < 1.13)
+                # 乖離率條件
                 gap_ratio = close.iloc[i] / ema5.iloc[i] if ema5.iloc[i] > 0 else 0
                 price_ok = (gap_ratio > 1.0) and (gap_ratio < 1.13)
 
@@ -110,7 +109,7 @@ if st.button("開始判斷"):
                 else:
                     st.warning("⚠️ 【不符合】目前未達到 V4 的全面突破標準。")
 
-                # 展開各項細節數據與「實際數值」供核對
+                # 展開各項細節數據與實際數值供核對
                 with st.expander("🔍 點此查看實際計算數值與對比"):
                     st.write(f"• **收盤價**: {round(close.iloc[i], 2)}  | 前20高: {round(prior_high, 2)} -> 突破: {'✅' if breakout_ok else '❌'}")
                     st.write(f"• **EMA5**: {round(ema5.iloc[i], 2)}  | EMA20: {round(ema20.iloc[i], 2)}  -> 多頭: {'✅' if trend_ok else '❌'}")
