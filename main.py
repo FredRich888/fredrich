@@ -15,11 +15,10 @@ if st.button("開始判斷"):
         try:
             ticker = stock_input.strip().upper()
             
-            # 智慧判斷：若是 4526 等已知上櫃或讓使用者輸入精準，優先順序調整
+            # 自動判斷上市櫃排序
             if ticker.endswith(".TW") or ticker.endswith(".TWO"):
                 symbols_to_try = [ticker]
             else:
-                # 針對部分上櫃股，把 .TWO 放到前面優先嘗試
                 symbols_to_try = [f"{ticker}.TWO", f"{ticker}.TW"]
             
             df = pd.DataFrame()
@@ -31,7 +30,6 @@ if st.button("開始判斷"):
                     if isinstance(temp_df.columns, pd.MultiIndex):
                         temp_df.columns = temp_df.columns.get_level_values(0)
                     if 'Close' in temp_df.columns and not temp_df['Close'].dropna().empty:
-                        # 檢查抓到的最新收盤價是否合理（避免抓到空資料）
                         df = temp_df
                         used_symbol = sym
                         break
@@ -47,12 +45,12 @@ if st.button("開始判斷"):
                 high = df['High']
                 low = df['Low']
                 open_p = df['Open']
-                volume = df['Volume'] / 1000.0  # 轉換為「張」
+                volume = df['Volume'] / 1000.0  # 轉換為張數
 
-                # 1. 均線 EMA
-                ema5 = close.ewm(span=5, adjust=False).mean()
-                ema20 = close.ewm(span=20, adjust=False).mean()
-                ema60 = close.ewm(span=60, adjust=False).mean()
+                # 1. 均線 EMA (使用 adjust=True 或標準算法對齊)
+                ema5 = close.ewm(span=5, adjust=True).mean()
+                ema20 = close.ewm(span=20, adjust=True).mean()
+                ema60 = close.ewm(span=60, adjust=True).mean()
 
                 # 2. 均量
                 mavol5 = volume.rolling(window=5).mean()
@@ -71,11 +69,11 @@ if st.button("開始判斷"):
                 rsi3 = calc_rsi(close, 3)
                 rsi6 = calc_rsi(close, 6)
 
-                # 4. MACD (對齊 XQ 的 DIF 6-12 參數)
-                ema6 = close.ewm(span=6, adjust=False).mean()
-                ema12 = close.ewm(span=12, adjust=False).mean()
+                # 4. MACD (對齊 XQ 的 DIF 6-12 參數與計算法)
+                ema6 = close.ewm(span=6, adjust=True).mean()
+                ema12 = close.ewm(span=12, adjust=True).mean()
                 dif = ema6 - ema12
-                macd = dif.ewm(span=2, adjust=False).mean()  # 配合 XQ 的 MACD2
+                macd = dif.ewm(span=2, adjust=True).mean()
                 osc = (dif - macd) * 2
 
                 # 5. OBV
