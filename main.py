@@ -5,22 +5,22 @@ import yfinance as yf
 
 # 網頁標題與介面設計
 st.title("📱 逢茗手機選股判斷器")
-st.write("輸入台股代號（例如：4568、2330），立刻為您檢視是否符合強勢突破條件！")
+st.write("輸入台股代號（例如：4526、4568），立刻為您檢視是否符合強勢突破條件！")
 
 # 使用者輸入股票代號
-stock_input = st.text_input("請輸入台股代號 (例如 4568):", "4568")
+stock_input = st.text_input("請輸入台股代號 (例如 4526):", "4526")
 
 if st.button("開始判斷"):
     with st.spinner('正在抓取資料並計算指標中...'):
         try:
-            # 清理使用者輸入的代號
             ticker = stock_input.strip().upper()
             
-            # 自動判斷上市 (.TW) 或上櫃 (.TWO)
+            # 智慧判斷：若是 4526 等已知上櫃或讓使用者輸入精準，優先順序調整
             if ticker.endswith(".TW") or ticker.endswith(".TWO"):
                 symbols_to_try = [ticker]
             else:
-                symbols_to_try = [f"{ticker}.TW", f"{ticker}.TWO"]
+                # 針對部分上櫃股，把 .TWO 放到前面優先嘗試
+                symbols_to_try = [f"{ticker}.TWO", f"{ticker}.TW"]
             
             df = pd.DataFrame()
             used_symbol = ""
@@ -31,11 +31,12 @@ if st.button("開始判斷"):
                     if isinstance(temp_df.columns, pd.MultiIndex):
                         temp_df.columns = temp_df.columns.get_level_values(0)
                     if 'Close' in temp_df.columns and not temp_df['Close'].dropna().empty:
+                        # 檢查抓到的最新收盤價是否合理（避免抓到空資料）
                         df = temp_df
                         used_symbol = sym
                         break
             
-            if df.empty or len(df) < 120 or 'Close' not in df.columns or df['Close'].dropna().empty:
+            if df.empty or len(df) < 120 or 'Close' not in df.columns:
                 st.error("找不到該股票資料，或歷史資料不足 120 天，請確認代號是否正確。")
             else:
                 if isinstance(df.columns, pd.MultiIndex):
@@ -46,16 +47,14 @@ if st.button("開始判斷"):
                 high = df['High']
                 low = df['Low']
                 open_p = df['Open']
-                
-                # 將 Yahoo Finance 的「股」轉換為台股常用的「張」（除以 1000）
-                volume = df['Volume'] / 1000.0
+                volume = df['Volume'] / 1000.0  # 轉換為「張」
 
                 # 1. 均線 EMA
                 ema5 = close.ewm(span=5, adjust=False).mean()
                 ema20 = close.ewm(span=20, adjust=False).mean()
                 ema60 = close.ewm(span=60, adjust=False).mean()
 
-                # 2. 均量 (現在單位為「張」，會跟 XQ 的 MA5 完全對齊)
+                # 2. 均量
                 mavol5 = volume.rolling(window=5).mean()
                 mavol10 = volume.rolling(window=10).mean()
 
@@ -72,11 +71,11 @@ if st.button("開始判斷"):
                 rsi3 = calc_rsi(close, 3)
                 rsi6 = calc_rsi(close, 6)
 
-                # 4. MACD (使用標準收盤價計算，貼近 XQ 數值)
+                # 4. MACD (對齊 XQ 的 DIF 6-12 參數)
+                ema6 = close.ewm(span=6, adjust=False).mean()
                 ema12 = close.ewm(span=12, adjust=False).mean()
-                ema26 = close.ewm(span=26, adjust=False).mean()
-                dif = ema12 - ema26
-                macd = dif.ewm(span=9, adjust=False).mean()
+                dif = ema6 - ema12
+                macd = dif.ewm(span=2, adjust=False).mean()  # 配合 XQ 的 MACD2
                 osc = (dif - macd) * 2
 
                 # 5. OBV
@@ -93,10 +92,8 @@ if st.button("開始判斷"):
                 macd_ok = (dif.iloc[i] > macd.iloc[i]) and (osc.iloc[i] > 0) and (osc.iloc[i] > osc.iloc[i-1])
                 obv_ok = (obv.iloc[i] > obv.iloc[i-1]) and (obv.iloc[i] > obv.iloc[i-5:i].mean())
                 
-                # RSI 區間判定條件
                 rsi_ok = (rsi6.iloc[i] >= 50) and (rsi6.iloc[i] <= 99) and (rsi3.iloc[i] <= 100)
                 
-                # 乖離率條件
                 gap_ratio = close.iloc[i] / ema5.iloc[i] if ema5.iloc[i] > 0 else 0
                 price_ok = (gap_ratio > 1.0) and (gap_ratio < 1.13)
 
@@ -115,7 +112,7 @@ if st.button("開始判斷"):
                     st.write(f"• **收盤價**: {round(close.iloc[i], 2)}  | 前20高: {round(prior_high, 2)} -> 突破: {'✅' if breakout_ok else '❌'}")
                     st.write(f"• **EMA5**: {round(ema5.iloc[i], 2)}  | EMA20: {round(ema20.iloc[i], 2)}  -> 多頭: {'✅' if trend_ok else '❌'}")
                     st.write(f"• **成交量**: {round(volume.iloc[i], 1)} 張 | 5日均量: {round(mavol5.iloc[i], 1)} 張 -> 量增: {'✅' if volume_ok else '❌'}")
-                    st.write(f"• **MACD(DIF-MACD)**: DIF={round(dif.iloc[i], 2)}, MACD={round(macd.iloc[i], 2)}, OSC={round(osc.iloc[i], 2)} -> 動能: {'✅' if macd_ok else '❌'}")
+                    st.write(f"• **MACD(DIF 6-12)**: DIF={round(dif.iloc[i], 2)}, MACD={round(macd.iloc[i], 2)}, OSC={round(osc.iloc[i], 2)} -> 動能: {'✅' if macd_ok else '❌'}")
                     st.write(f"• **OBV**: {round(obv.iloc[i], 0)} -> 向上: {'✅' if obv_ok else '❌'}")
                     st.write(f"• **RSI**: RSI3={round(rsi3.iloc[i], 2)}% , RSI6={round(rsi6.iloc[i], 2)}%  -> 區間: {'✅' if rsi_ok else '❌'}")
                     st.write(f"• **乖離率**: 收盤/EMA5 = {round(gap_ratio, 3)} (<1.13) -> 控制: {'✅' if price_ok else '❌'}")
